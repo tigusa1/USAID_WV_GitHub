@@ -235,47 +235,38 @@ elseif flag_intervention==2
         [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
             stocks_idx,0,flag_lasso); I = I+1;
     else
-        flag.version_2021_09_07 = 1
-        if flag.version_2021_09_07
-            I = 1;
-            a_ints{I} = 'Youth + stigma + machismo';
-            x_intervention = 9/100;
-            machismo_int    = -x_intervention*1/2;
-            youth_int       =  x_intervention*1/2;
-            stigma_int      = -x_intervention*0;
-            f_breakdown_int = -x_intervention*0;
-            f_cohesion_int  =  x_intervention*0;
-            mh_int          =  x_intervention*0;
-            [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
-                stocks_idx,0,flag_lasso); I = I+1;
-            a_ints{I} = 'Youth + family + mental-health';
-            machismo_int    = -x_intervention*0;
-            youth_int       =  x_intervention*1/2;
-            stigma_int      = -x_intervention*0;
-            f_breakdown_int = -x_intervention*1/2;
-            f_cohesion_int  =  x_intervention*1/2;
-            mh_int          =  x_intervention*1/2;
-            [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
-                stocks_idx,0,flag_lasso);
-        else
-            % VERSION 2022-03-28
-            %   replace Youth + stigma + machismo with Youth + machismo + bad-governance
-            %   delete Youth + family + mental-health
-            I = 1;
-            a_ints{I} = 'Youth + machismo + bad-governance';
-            x_intervention = 9/100;
-            machismo_int    = -x_intervention*0;
-            youth_int       =  x_intervention*0;
-            H_int_1         =  x_intervention*1/3; % machismo, bad-governance, youth-empowerment
-            H_int_2         =  x_intervention*1;   % victimizer, gang-affiliation, cohesion, territorial, bully
-            stigma_int      = -x_intervention*0;
-            f_breakdown_int = -x_intervention*0;
-            f_cohesion_int  =  x_intervention*0;
-            mh_int          =  x_intervention*0;
-
-            [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
-                stocks_idx,0,flag_lasso);
-        end
+        I = 1;
+        x_intervention = 9/100;
+%         a_ints{I} = 'Youth + stigma + machismo';
+%         machismo_int    = -x_intervention*1/2;
+%         youth_int       =  x_intervention*1/2;
+%         stigma_int      = -x_intervention*0;
+%         f_breakdown_int = -x_intervention*0;
+%         f_cohesion_int  =  x_intervention*0;
+%         mh_int          =  x_intervention*0;
+%         [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
+%             stocks_idx,0,flag_lasso); I = I+1;
+%         a_ints{I} = 'Youth + family + mental-health';
+%         machismo_int    = -x_intervention*0;
+%         youth_int       =  x_intervention*1/2;
+%         stigma_int      = -x_intervention*0;
+%         f_breakdown_int = -x_intervention*1/2;
+%         f_cohesion_int  =  x_intervention*1/2;
+%         mh_int          =  x_intervention*1/2;
+%         [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
+%             stocks_idx,0,flag_lasso); I = I+1;
+        a_ints{I} = 'Youth + machismo + bad-governance';
+        H_int_1         =  x_intervention*1/3; % machismo, bad-governance, youth-empowerment
+        H_int_2         =  x_intervention*1;   % victimizer, gang-affiliation, cohesion, territorial, bully
+        machismo_int    = -x_intervention*0;
+        youth_int       =  x_intervention*0;
+        stigma_int      = -x_intervention*0;
+        f_breakdown_int = -x_intervention*0;
+        f_cohesion_int  =  x_intervention*0;
+        mh_int          =  x_intervention*0;
+        
+        [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
+            stocks_idx,0,flag_lasso);
     end
     n_ints = length(a_ints);
 else
