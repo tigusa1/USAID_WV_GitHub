@@ -60,6 +60,7 @@ if flag_print
     fprintf('GOOD:\n'), fprintf('%s\n',sort(var_good)), fprintf('\n')
     fprintf('ALL:\n'), fprintf('%s\n',sort(var_names_orig)), fprintf('\n')
 end
+
 machismo_int = 0;
 youth_int    = 0;
 stigma_int   = 0;
@@ -68,6 +69,7 @@ mh_int          = 0;
 f_cohesion_int  = 0;
 H_int_1         = 0;
 H_int_2         = 0;
+
 resilience = 0;
 
 % PLOT DATA
@@ -134,11 +136,8 @@ end
 % RUN MODEL
 flag_run = 1;
 lambda = 0.001*10;      flag_lasso = 1; % if lasso is used, need larger lambda
-if flag.old_data
-    lambda = 0.001*.9*6;    flag_lasso = 0;
-else
-    lambda = 0.001*.9*6*4;  flag_lasso = 0;
-end
+lambda = 0.001*.9*6;    flag_lasso = 0;
+lambda = 0.001*.9*6*4;flag_lasso = 0;
 if strcmp(country,'H'), flag_lasso = 2; end % 2-use ES beta values
 [betas1,betas0,betas0s] = load_betas(3,1); % 1,2,3 corresponds to lambda = 0.001,0.01,0.001 [multiplier = 5]
 betas1 = [betas1 ; zeros(var_S_N*2,1)];
@@ -247,47 +246,38 @@ elseif flag_intervention==2
         [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
             stocks_idx,0,flag_lasso); I = I+1;
     else
-        flag.version_2021_09_07 = 1
-        if flag.version_2021_09_07
-            I = 1;
-            a_ints{I} = 'Youth + stigma + machismo';
-            x_intervention = 9/100;
-            machismo_int    = -x_intervention*1/2;
-            youth_int       =  x_intervention*1/2;
-            stigma_int      = -x_intervention*0;
-            f_breakdown_int = -x_intervention*0;
-            f_cohesion_int  =  x_intervention*0;
-            mh_int          =  x_intervention*0;
-            [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
-                stocks_idx,0,flag_lasso); I = I+1;
-            a_ints{I} = 'Youth + family + mental-health';
-            machismo_int    = -x_intervention*0;
-            youth_int       =  x_intervention*1/2;
-            stigma_int      = -x_intervention*0;
-            f_breakdown_int = -x_intervention*1/2;
-            f_cohesion_int  =  x_intervention*1/2;
-            mh_int          =  x_intervention*1/2;
-            [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
-                stocks_idx,0,flag_lasso);
-        else
-            % VERSION 2022-03-28
-            %   replace Youth + stigma + machismo with Youth + machismo + bad-governance
-            %   delete Youth + family + mental-health
-            I = 1;
-            a_ints{I} = 'Youth + machismo + bad-governance';
-            x_intervention = 9/100;
-            machismo_int    = -x_intervention*0;
-            youth_int       =  x_intervention*0;
-            H_int_1         =  x_intervention*1/3; % machismo, bad-governance, youth-empowerment
-            H_int_2         =  x_intervention*1;   % victimizer, gang-affiliation, cohesion, territorial, bully
-            stigma_int      = -x_intervention*0;
-            f_breakdown_int = -x_intervention*0;
-            f_cohesion_int  =  x_intervention*0;
-            mh_int          =  x_intervention*0;
-
-            [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
-                stocks_idx,0,flag_lasso);
-        end
+        I = 1;
+        x_intervention = 9/100;
+%         a_ints{I} = 'Youth + stigma + machismo';
+%         machismo_int    = -x_intervention*1/2;
+%         youth_int       =  x_intervention*1/2;
+%         stigma_int      = -x_intervention*0;
+%         f_breakdown_int = -x_intervention*0;
+%         f_cohesion_int  =  x_intervention*0;
+%         mh_int          =  x_intervention*0;
+%         [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
+%             stocks_idx,0,flag_lasso); I = I+1;
+%         a_ints{I} = 'Youth + family + mental-health';
+%         machismo_int    = -x_intervention*0;
+%         youth_int       =  x_intervention*1/2;
+%         stigma_int      = -x_intervention*0;
+%         f_breakdown_int = -x_intervention*1/2;
+%         f_cohesion_int  =  x_intervention*1/2;
+%         mh_int          =  x_intervention*1/2;
+%         [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
+%             stocks_idx,0,flag_lasso); I = I+1;
+        a_ints{I} = 'Youth + machismo + bad-governance';
+        H_int_1         =  x_intervention*1/3; % machismo, bad-governance, youth-empowerment
+        H_int_2         =  x_intervention*1;   % victimizer, gang-affiliation, cohesion, territorial, bully
+        machismo_int    = -x_intervention*0;
+        youth_int       =  x_intervention*0;
+        stigma_int      = -x_intervention*0;
+        f_breakdown_int = -x_intervention*0;
+        f_cohesion_int  =  x_intervention*0;
+        mh_int          =  x_intervention*0;
+        
+        [y_err_ints{I},y_model_ints{I}] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
+            stocks_idx,0,flag_lasso);
     end
     n_ints = length(a_ints);
 elseif flag_intervention==4 % Zhixi here is the new code
@@ -749,17 +739,12 @@ global resilience flag
         + betas(16)*(S_SD)*(Neighborhood_Stigma + Extortion - Economy_Opportunities) ...
         - betas(beta_N+7) + stigma_int ...
         - resilience;
-    if flag.old
-        sign_Gang_Control = -1;
-    else
-        sign_Gang_Control = +1; % CHANGE: SIGN OF Gang_Control
-    end
     D_S_SV = ...
         + betas(17)*(S_SA)*(-Economy_Opportunities + Gang_Affiliation - S_LE - Mental_Health + S_SD) ...
         + betas(18)*(S_GM) ...
         + betas(19)*(S_PSV)*(S_SA) ...
         + betas(20)*(S_UN)*(Exposure_to_Violent_Media + Family_Breakdown  ...
-                        - Youth_Empowerment + sign_Gang_Control*Gang_Control) ...
+                        - Youth_Empowerment + Gang_Control) ... % CHANGE: SIGN OF Gang_Control
         - betas(beta_N+8) - mh_int + f_breakdown_int - youth_int;
     D_S_TM = ...
         + betas(21)*(S_SV)*(1-Access_to_Contraception) ...
