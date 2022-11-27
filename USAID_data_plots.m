@@ -10,7 +10,7 @@ flag_x_y   = 0;
 flag_print = 0;
 
 flag_intervention = 2; % 0-none, 1-all interventions, 2-direct injection, 3, 4-resilience
-country = 'H'; % H or ES
+country = 'ES'; % H or ES
 
 if flag_intervention
     plot_one_model = 0;
@@ -27,13 +27,14 @@ end
 
 % READ AND INITIALIZE DATA
 flag.plot_stocks = 0; % if set to 1, then run twice: flag.old_data = 2 then 1
-flag.old_data    = 0; % 2-old, 1-new, old scaling, 0-new, new scaling
+flag.old_data    = 1; % 2-old, 1-new, old scaling, 0-new, new scaling
 if flag.old_data==2
     T = readtable('data_2021_09_07.xlsx','sheet',country);
     yrs_max = 2021; % 2021 is the last year for old data
 else
     if flag.old_data==1
         T = readtable('data_2022_11_26aTI_raw.xlsx','sheet',country);
+        T = readtable('data_2022_11_26bTI_raw.xlsx','sheet',country);
         yrs_max = 2022;
     else
         T = readtable('data_2022_11_21TI_raw.xlsx','sheet',country); % original scaling
