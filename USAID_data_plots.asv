@@ -10,7 +10,7 @@ flag_x_y   = 0;
 flag_print = 0;
 
 flag_intervention = 2; % 0-none, 1-all interventions, 2-direct injection, 3, 4-resilience
-country = 'H'; % H or ES
+country = 'ES'; % H or ES
 
 if flag_intervention
     plot_one_model = 0;
