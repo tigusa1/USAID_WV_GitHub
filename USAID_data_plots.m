@@ -1,6 +1,6 @@
 function USAID_data_plots_ABM_2022
 
-global ts i_beta a_beta var_S_N beta_N i_goods pcolors
+global ts i_beta a_beta var_S_N beta_N i_goods pcolors flag
 global machismo_int youth_int stigma_int f_breakdown_int mh_int f_cohesion_int H_int_1 H_int_2
 global resilience
 
@@ -10,14 +10,14 @@ flag_x_y   = 0;
 flag_print = 0;
 
 flag_intervention = 2; % 0-none, 1-all interventions, 2-direct injection, 3, 4-resilience
-country = 'ES'; % H or ES
+country = 'H'; % H or ES
 
 if flag_intervention
     plot_one_model = 0;
 else
     plot_one_model = 1; % 1-one plot (don't use with intervention)
 end
-if strcmp(country,'ES')
+if strcmp(country,'H')
     num_eval = 3000*3.0; % ES: used 3000*3, higher values result in smaller betas
     fig_no = 0;
 else
@@ -26,8 +26,13 @@ else
 end
 
 % READ AND INITIALIZE DATA
+flag.old         = 1  % non-unit weights and (1 - stock) multiplier for stock derivatives
 flag.plot_stocks = 0; % if set to 1, then run twice: flag.old_data = 2 then 1
-flag.old_data    = 1; % 2-old, 1-new, old scaling, 0-new, new scaling
+flag.old_data    = 1; % 2-old, 1-new, old scaling, 0-new, new scaling (also changes lambda)
+flag.correct     = 0; % 1-change sign in GM, 0-original sign
+flag.FIM         = 1; % 1-analysis of SE of beta using FIM (and uncontrained maximization)
+flag.find_idx    = 0; % FIM: find the index using largest beta (for 2022 only)
+
 if flag.old_data==2
     T = readtable('data_2021_09_07.xlsx','sheet',country);
     yrs_max = 2021; % 2021 is the last year for old data
@@ -140,11 +145,15 @@ end
 
 % RUN MODEL
 flag_run = 1;
-lambda = 0.001*10;      flag_lasso = 1; % if lasso is used, need larger lambda
+% lambda = 0.001*10;      flag_lasso = 1; % if lasso is used, need larger lambda
 if flag.old_data==1
-    lambda = 0.001*.9*6;    flag_lasso = 0;
+    lambda = 0.001*.9*6*2;  flag_lasso = 0; % 1.5 -> more fitting to data, larger beta
 elseif flag.old_data==2
-    lambda = 0.001*.9*6*2;  flag_lasso = 0;
+    if strcmp(country,'ES')
+        lambda = 0.001*.9*6*1;  flag_lasso = 0;
+    else
+        lambda = 0.001*.9*6*1.9; % 1 (small betas ~ 0.7), 2 (0.1), 1.85
+    end
 else
     lambda = 0.001*.9*6*4;  flag_lasso = 0; % original lambda is less stable
 end
@@ -157,6 +166,35 @@ betas0 = ones(size(betas0))*0.1;   % same solution when lambda = 0.1, if less th
 y_data = data_values(:,stocks_idx);
 [y_err0,y_model0] = eval_stocks(betas0,data_values,years_N,var_N,var_names_orig,...
     stocks_idx,0,flag_lasso);
+
+% ABC (Note - cannot uniquely determine the prior variance of beta - depends on threshold)
+flag.ABC = 0;
+if flag.ABC
+    N_ABC = 100*100*3;
+    for i=1:N_ABC
+        betas_i(i,:) = abs(randn(size(betas0)))*1.5; % 4 -> y_err is all Inf, 2 very few
+        y_err_i(i) = eval_stocks(betas_i(i,:),data_values,years_N,var_N,var_names_orig,...
+            stocks_idx,0,0); % use flag_lasso = 0
+    end
+    y_err_sort = sort(y_err_i);
+    num_not_inf = sum(y_err_i<Inf);
+    percent_not_inf = num_not_inf / N_ABC * 100
+    accept_percent = 0.5;
+    accept_threshold = y_err_sort(ceil(N_ABC*accept_percent/100));
+    accept_i = y_err_i < accept_threshold;
+    y_ABC = y_err_i(accept_i);
+    betas_ABC = betas_i(accept_i,:);
+    plot_betas(mean(betas_ABC),-1)
+    [U,S,V] = svd(betas_ABC-mean(betas_ABC),'econ'); % betas = U*S*V' = sum U.j Sjj V.j
+
+    fig = figure(99); fig.Name = 'ABC (difficult to see patterns)';
+    subplot(2,2,1), histogram(log10(y_ABC)), title(sprintf('log10 errors, N = %i',sum(accept_i)))
+    subplot(2,2,2), imagesc(U), title('U')
+    subplot(2,2,3), plot(diag(S),'bo-'), title('S')
+    subplot(2,2,4), imagesc(V'), title("V'")
+
+    keyboard, return
+end
 
 % PLOT STOCKS DATA FROM DIFFERENT DATA SETS
 if flag.plot_stocks
@@ -175,27 +213,55 @@ if flag_run
         betas0,[],[],[],[],lower_bounds,upper_bounds,[],options);
     [y_err,y_model] = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,...
         stocks_idx,lambda,flag_lasso);
+    y_err_0 = eval_stocks(betas,data_values,years_N,var_N,var_names_orig,stocks_idx,0,0);
     fprintf('\nBeta values [original betas0s, optimized betas] for lambda = %.4f\n',lambda)
-    i_order = [ 1:2 17:20 22:25 3:4 5:6 7 8:12 13:15 16 21 26 27:28];
-    x_pos = [(1:2) (3:6)+0.5 (7:10)+1 (11:12)+1.5 ...
-        (13:14)+2 (15)+2.5 (16:20)+3 ...
-        (21:23)+3.5 (24)+4 (25)+4.5 (26)+5 (27:28)+5.5];
-%   for j=1:var_S_N; fprintf('%2i %s\n',j,a_beta(j)), end
-    fig = figure(230+fig_no); fig.Name = 'beta'; fig.Color = 'w';
-    fig.Position = [740 43 804 533];
-    barh(x_pos,betas(i_order)), ax = gca;
-    ax.YTick = x_pos;
-    ax.YTickLabel = a_beta(i_order); ax.YDir = 'reverse';
-    for j=1:var_N
-        if j<=var_S_N
-            fprintf('%2i %8.1f %8.1f %8.1f\n',j,betas([j beta_N+j beta_N+var_S_N+j]))
+    plot_betas( betas,          200)
+%     fprintf('%8.1f %2i\n',[betas i_beta']')
+%     fprintf('%8.1f %8.1f %2i\n',[betas1 betas i_beta']')
+%     keyboard
+    % UNCONSTRAINED OPTIMIZATION, THEN SELECTED OPTIMIZATION TO GET HESSIAN OF SUBSET OF BETAS
+    if flag.FIM
+        % ALL BETAS
+        options = optimoptions('fminunc','MaxFunctionEvaluations',num_eval*10,'MaxIterations',400*10);
+        [betasSqrt,~,~,~,~,hessianSqrt] = fminunc(@(betasSqrt) ...
+            eval_stocks(betasSqrt.^2,data_values,years_N,var_N,var_names_orig,stocks_idx,...
+            lambda,flag_lasso),sqrt(betas),options);
+
+%         se = sqrt(diag(inv(hessianSqrt))); % VERY LARGE SE USING THE DIAGONAL ELEMENTS
+%         betasSqrtSE = betasSqrt + se;
+%         betasSE = (betasSqrtSE).^2 - betasSqrt.^2;
+%         plot_betas( betasSE,      212), xlim([0 10])
+
+        % SELECTED BETAS
+        options = optimoptions('fminunc','MaxFunctionEvaluations',num_eval);
+        if flag.find_idx
+            if flag.old_data==1
+                idx = find((betasSqrt.^2)>0.3); % 2022: 0.3 (22 betas), 0.4 (16), 0.5 (12)
+            elseif flag.old_data==2
+                idx = find((betasSqrt.^2)>0.5); % 2021: 0.5 (11)
+            end
+            keyboard
         else
-            fprintf('%2i %8.1f\n',j,betas(j))
+            idx_2021 = [ 1 2 4 15 16  19 27 28 41 49  50   ];        % betaSE(19) is very large
+            idx_2022 = [ 2 4 7 15 16  17 18 26 27 28 32  41:50 52];
+            
+            idx      = setdiff(union(idx_2021,idx_2022),19);
+            idx      = idx_2022;
         end
+        [betasSqrtIdx,~,~,~,~,hessianSqrtSelect] = fminunc(@(betas_sqrt_idx) ...
+            eval_stocks_idx(betasSqrt.^2,betas_sqrt_idx,idx,... % eval_stocks_idx takes square of betas_sqrt_idx
+            data_values,years_N,var_N,var_names_orig,stocks_idx,...
+            lambda,flag_lasso),...
+            betasSqrt(idx),options);
+
+        se = sqrt(diag(inv(hessianSqrtSelect)));
+        betasSqrtSESelect = betasSqrt;
+        betasSqrtSESelect(idx) = betasSqrt(idx) + se;
+        betasSE = (betasSqrtSESelect).^2 - betasSqrt.^2;
+        plot_betas( betasSE,      202), xlim([0 20])
+        plot_betas( betasSqrt.^2, 201)
+        keyboard
     end
-%   fprintf('%8.1f %2i\n',[betas i_beta']')
-%   fprintf('%8.1f %8.1f %2i\n',[betas1 betas i_beta']')
-%   keyboard
 else
     y_model = y_model0;
 end
@@ -359,6 +425,14 @@ end
 keyboard
 
 
+function [y_err,y_model] = eval_stocks_idx(Betas,betas_sqrt_idx,idx,data_values,years_N,var_N,var_names_orig,...
+    stocks_idx,lambda,flag_lasso)
+
+    Betas(idx) = betas_sqrt_idx.^2;
+    [y_err,y_model] = eval_stocks(Betas,data_values,years_N,var_N,var_names_orig,...
+        stocks_idx,lambda,flag_lasso);
+
+
 function [ data_values,x_data,y_data ] = ...
     init_variables(data_values_in,years_N,var_N,var_names_orig,stocks_idx,...
     yrs,var_names)
@@ -419,9 +493,8 @@ t_N = length(ts);
 i_beta = [1:beta_N+var_S_N*2];
 
 % INTERPOLATE, EXTRAPOLATE, SET WEIGHTS
-flag.old = 1 % weights, (1-stock) multiplier for stock derivatives
 if flag.old
-    w_low = 0.1*3;         % low weight value
+    w_low = 0.1*3;         % low weight value (e.g. for missing data), default is 1.0
     w_high_multiplier = 5; % multiplier for more important stocks
 else
     w_low = 1; w_high_multiplier = 1;
@@ -443,38 +516,38 @@ for i=1:var_N % for each of the variables
         i_good_last = i_good(end);
         if (i_good_last - i_good_first + 1) > length(i_good) % gaps in data
             for j1=i_good_first:i_good_last
-                if ~ismember(j1,i_good) && ismember(j1-1,i_good) % j_gap_start is at the beginning of gap
-                    for j2=j1:i_good_last-1
-                        if ismember(j2+1,i_good) % j_gap_end is at the end of gap
-                            data_values(j1:j2,i) = ...
+                if ~ismember(j1,i_good) && ismember(j1-1,i_good) % j1: beginning of gap
+                    for j2=j1:i_good_last-1      % look at all possible endings of gap
+                        if ismember(j2+1,i_good) % j2: end of gap
+                            data_values(j1:j2,i) = ... % interpolate good data at ends of gap
                                 interp1([j1-1 j2+1],data_values([j1-1 j2+1],i),j1:j2);
-                            if i<=var_S_N
+                            if i<=var_S_N        % if this is a stock, then use a low weight
                                 weights(j1:j2,i) = w_low;
                             end
-                            break % end for
+                            break % end for, look for j1 at the beginning of the next gap
                         end
                     end
                 end
             end
         end
-        data_value_first = data_values_in(i_good_first,i);
-        data_value_last = data_values_in(i_good_last,i);
+        data_value_first = data_values_in(i_good_first,i); % NOCB Next Obs Carry Backward
+        data_value_last = data_values_in(i_good_last,i);   % LOCF Last Obs Carry Forward
         data_values(1:i_good_first,i) = data_value_first;
         data_values(i_good_last:end,i) = data_value_last;
     end
     if i<=var_S_N
-        stock_initial(i) = data_value_first; % not used, but maybe useful later
+        stock_initial(i) = data_value_first;     % not used, but maybe useful later
         if isempty(i_good)
-            weights(:,i) = w_low;
+            weights(:,i) = w_low;                % no data: all weights are low
         else
-            weights(1:i_good_first,i) = w_low;
-            weights(i_good_last:end,i) = w_low;
+            weights(1:i_good_first,i) = w_low;   % NOCB imputed data: low weights
+            weights(i_good_last:end,i) = w_low;  % LOCF imputed data: low weights
         end
     end
     i_goods{i} = i_good; % save all good
 end
 
-weights(:,i_weights) = weights(:,i_weights)*w_high_multiplier;
+weights(:,i_weights) = weights(:,i_weights)*w_high_multiplier; % important stocks: multiply
 % weights(:,12) = weights(:,12)*9; % MD
 
 % weights(1:years_N-1,3) = w_low; % GM only 2021 is 1 (use years_N-1 = 2020)
@@ -671,64 +744,60 @@ for k=1:t_N-1
     t     = ts(k);
     t_int = round(t);
     % SET VARIABLES AND STOCKS AT TIME t
-    for i=1:var_N
-        if i<=var_S_N
-            if flag_eval
-                var_name = var_names_orig(i);
+    if flag_eval
+        for i=1:var_N
+            var_name = var_names_orig(i);
+            if i<=var_S_N
                 eval_str = strcat("S_",var_name,"=","S_",var_name,"_all(k);");
-                eval(eval_str)
-                if k==2, fprintf('%s\n',eval_str), end
             else
-                S_PHV=S_PHV_all(k);
-                S_LE=S_LE_all(k);
-                S_GM=S_GM_all(k);
-                S_IN=S_IN_all(k);
-                S_PG=S_PG_all(k);
-                S_SD=S_SD_all(k);
-                S_UN=S_UN_all(k);
-                S_SV=S_SV_all(k);
-                S_TM=S_TM_all(k);
-                S_PSV=S_PSV_all(k);
-                S_SA=S_SA_all(k);
-                S_MD=S_MD_all(k);
-            end
-        else
-            if flag_eval
-                var_name = var_names_orig(i);
                 eval_str = strcat(var_name,"=",var_name,"_all(t_int);");
-                eval(eval_str)
-                if k==2, fprintf('%s\n',eval_str), end
-            else
-                Access_to_Abortion=Access_to_Abortion_all(t_int);
-                Access_to_Contraception=Access_to_Contraception_all(t_int);
-                Bad_Governance=Bad_Governance_all(t_int) - H_int_1;
-                Bully=Bully_all(t_int) - H_int_2;
-                Deportation=Deportation_all(t_int);
-                Economy=Economy_all(t_int);
-                Economy_Opportunities=Economy_Opportunities_all(t_int);
-                Exposure_to_Violent_Media=Exposure_to_Violent_Media_all(t_int);
-                Extortion=Extortion_all(t_int);
-                Family_Breakdown=Family_Breakdown_all(t_int);
-                Family_Cohesion=Family_Cohesion_all(t_int);
-                Gang_Affiliation=Gang_Affiliation_all(t_int) - H_int_2;
-                Gang_Cohesion=Gang_Cohesion_all(t_int) - H_int_2;
-                Gang_Control=Gang_Control_all(t_int);
-                Interventions=Interventions_all(t_int);
-                Impunity_Governance=Impunity_Governance_all(t_int);
-                Machismo=Machismo_all(t_int) - H_int_1;
-                Mental_Health=Mental_Health_all(t_int);
-                Neighborhood_Stigma=Neighborhood_Stigma_all(t_int);
-                School_Quality=School_Quality_all(t_int);
-                Territorial_Fights=Territorial_Fights_all(t_int) - H_int_2;
-                Victimizer=Victimizer_all(t_int) - H_int_2;
-                Youth_Empowerment=Youth_Empowerment_all(t_int) + H_int_1;
             end
+            eval(eval_str)
+            if k==2, fprintf('%s\n',eval_str), end
         end
+    else
+        S_PHV=S_PHV_all(k);
+        S_LE=S_LE_all(k);
+        S_GM=S_GM_all(k);
+        S_IN=S_IN_all(k);
+        S_PG=S_PG_all(k);
+        S_SD=S_SD_all(k);
+        S_UN=S_UN_all(k);
+        S_SV=S_SV_all(k);
+        S_TM=S_TM_all(k);
+        S_PSV=S_PSV_all(k);
+        S_SA=S_SA_all(k);
+        S_MD=S_MD_all(k);
+
+        Access_to_Abortion=Access_to_Abortion_all(t_int);
+        Access_to_Contraception=Access_to_Contraception_all(t_int);
+        Bad_Governance=Bad_Governance_all(t_int) - H_int_1;
+        Bully=Bully_all(t_int) - H_int_2;
+        Deportation=Deportation_all(t_int);
+        Economy=Economy_all(t_int);
+        Economy_Opportunities=Economy_Opportunities_all(t_int);
+        Exposure_to_Violent_Media=Exposure_to_Violent_Media_all(t_int);
+        Extortion=Extortion_all(t_int);
+        Family_Breakdown=Family_Breakdown_all(t_int);
+        Family_Cohesion=Family_Cohesion_all(t_int);
+        Gang_Affiliation=Gang_Affiliation_all(t_int) - H_int_2;
+        Gang_Cohesion=Gang_Cohesion_all(t_int) - H_int_2;
+        Gang_Control=Gang_Control_all(t_int);
+        Interventions=Interventions_all(t_int);
+        Impunity_Governance=Impunity_Governance_all(t_int);
+        Machismo=Machismo_all(t_int) - H_int_1;
+        Mental_Health=Mental_Health_all(t_int);
+        Neighborhood_Stigma=Neighborhood_Stigma_all(t_int);
+        School_Quality=School_Quality_all(t_int);
+        Territorial_Fights=Territorial_Fights_all(t_int) - H_int_2;
+        Victimizer=Victimizer_all(t_int) - H_int_2;
+        Youth_Empowerment=Youth_Empowerment_all(t_int) + H_int_1;
     end
+
     betas(i_beta) = Betas;
 
-global machismo_int youth_int stigma_int f_breakdown_int mh_int f_cohesion_int H_int_1 H_int_2
-global resilience flag
+    global machismo_int youth_int stigma_int f_breakdown_int mh_int f_cohesion_int H_int_1 H_int_2
+    global resilience flag
 
 % DON'T USE Interventions
     Interventions = 0;
@@ -766,11 +835,10 @@ global resilience flag
         + betas(16)*(S_SD)*(Neighborhood_Stigma + Extortion - Economy_Opportunities) ...
         - betas(beta_N+7) + stigma_int ...
         - resilience;
-    if flag.old
-        sign_Gang_Control = -1;
+    if flag.correct
         sign_Gang_Control = +1; % no visible effect on stocks, but effects on some smaller beta
     else
-        sign_Gang_Control = +1; % CHANGE: SIGN OF Gang_Control
+        sign_Gang_Control = -1;
     end
     D_S_SV = ...
         + betas(17)*(S_SA)*(-Economy_Opportunities + Gang_Affiliation - S_LE - Mental_Health + S_SD) ...
@@ -965,14 +1033,37 @@ if flag_lasso==1
 elseif flag_lasso==0
     y_err = y_err + sum(betas.^2)*lambda; % sum of squares
 elseif flag_lasso==2
-    idx_constrained = [2 18 19 4 15 27];
-    betas_constrained = [1.97 1.27 1.16 1.57 1.37 2.76]; % set from ES
+    idx_constrained = [2 18 19 4 15 27]; % corresponding to no data
+    betas_constrained = [1.9622 1.2637 1.1608 1.5700 1.2395 2.7576]; % ES betas(idx_constrained)
     idx_not_constrained = setdiff(1:length(betas),idx_constrained);
     y_err = y_err + sum(betas(idx_not_constrained).^2)*lambda ...
         + sum((betas(idx_constrained) - betas_constrained).^2)*lambda;
 end
 
 return
+
+
+function plot_betas(betas,fig_no)
+global a_beta var_N var_S_N beta_N
+
+i_order = [ 1:2 17:20 22:25 3:4 5:6 7 8:12 13:15 16 21 26 27:28];
+x_pos = [(1:2) (3:6)+0.5 (7:10)+1 (11:12)+1.5 ...
+    (13:14)+2 (15)+2.5 (16:20)+3 ...
+    (21:23)+3.5 (24)+4 (25)+4.5 (26)+5 (27:28)+5.5];
+for j=1:var_S_N; fprintf('%2i %s\n',j,a_beta(j)), end
+fig = figure(230+fig_no); fig.Name = 'beta'; fig.Color = 'w';
+fig.Position = [740 43 804 533];
+barh(x_pos,betas(i_order)), ax = gca;
+ax.YTick = x_pos;
+ax.YTickLabel = a_beta(i_order); ax.YDir = 'reverse';
+for j=1:var_N
+    if j<=var_S_N
+        fprintf('%2i %8.1f %8.1f %8.1f\n',j,betas([j beta_N+j beta_N+var_S_N+j]))
+    else
+        fprintf('%2i %8.1f\n',j,betas(j))
+    end
+end
+
 
 function plot_results(fig_no, hold_on, var_S_N, ...
     var_names_orig, stocks_idx, yrs, y_data, var_names, years_N, yrs_lbl)
